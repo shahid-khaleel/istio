@@ -5,6 +5,8 @@ This mirrors Part 7 of the book, adapted specifically for minikube's networking 
 
 Run every command as-is, in order. Where a step needs its own terminal (long-running), that's called out.
 
+**Diagram:** [Trace Join Pipeline](https://claude.ai/code/artifact/e8cad4e4-bdd9-473c-aa51-f365dce876c8) — visualizes the full request/telemetry path (Step 8.5) and the trace-propagation bug and fix (Step 8.6).
+
 ---
 
 ## 0. Prerequisites
