@@ -1,0 +1,2 @@
+FROM docker.io/istio/examples-bookinfo-productpage-v1:1.20.1
+COPY productpage_patched.py /opt/microservices/productpage.py
