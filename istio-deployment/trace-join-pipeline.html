@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trace Join Pipeline</title>
+<style>
+  html{color-scheme:light dark;}
+  body{margin:0;}
+  img{max-width:100%;}
+  :root{
+    --bg:#f2f5f9;
+    --surface:#ffffff;
+    --surface-2:#eaeff5;
+    --ink:#1a2230;
+    --muted:#5c6c80;
+    --line:#d6dee7;
+    --mesh:#3a5fa8;
+    --mesh-soft:#e3ebf8;
+    --trace:#a8681f;
+    --trace-soft:#f3e6d4;
+    --good:#2b7a56;
+    --good-soft:#dff0e7;
+    --danger:#ab423c;
+    --danger-soft:#f6e2e0;
+    --font-display:'IBM Plex Sans',system-ui,sans-serif;
+    --font-body:'IBM Plex Sans',system-ui,sans-serif;
+    --font-mono:'IBM Plex Mono','SFMono-Regular',Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#10151d;
+      --surface:#161d27;
+      --surface-2:#1b2430;
+      --ink:#e7ecf3;
+      --muted:#93a4b9;
+      --line:#2b3543;
+      --mesh:#8db0e9;
+      --mesh-soft:#202c42;
+      --trace:#e0a35d;
+      --trace-soft:#3a2c1a;
+      --good:#7ecaa4;
+      --good-soft:#1c3226;
+      --danger:#e18b85;
+      --danger-soft:#3a221f;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#10151d;
+    --surface:#161d27;
+    --surface-2:#1b2430;
+    --ink:#e7ecf3;
+    --muted:#93a4b9;
+    --line:#2b3543;
+    --mesh:#8db0e9;
+    --mesh-soft:#202c42;
+    --trace:#e0a35d;
+    --trace-soft:#3a2c1a;
+    --good:#7ecaa4;
+    --good-soft:#1c3226;
+    --danger:#e18b85;
+    --danger-soft:#3a221f;
+  }
+
+  *{box-sizing:border-box;}
+  body{background:var(--bg);color:var(--ink);font-family:var(--font-body);}
+  .page{max-width:920px;margin:0 auto;padding:56px 28px 80px;}
+
+  .eyebrow{
+    font-family:var(--font-mono);
+    font-size:12.5px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin:0 0 10px;
+  }
+  h1{
+    font-family:var(--font-display);
+    font-weight:700;
+    font-size:clamp(28px,4.2vw,38px);
+    line-height:1.15;
+    margin:0 0 14px;
+    text-wrap:balance;
+  }
+  .lede{
+    font-size:16px;
+    line-height:1.65;
+    color:var(--muted);
+    max-width:62ch;
+    margin:0 0 8px;
+  }
+  .lede code, p code, li code{
+    font-family:var(--font-mono);
+    font-size:.92em;
+    background:var(--surface-2);
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:.05em .35em;
+    color:var(--ink);
+  }
+
+  section{margin-top:56px;}
+  h2{
+    font-family:var(--font-display);
+    font-size:21px;
+    font-weight:700;
+    margin:0 0 6px;
+    text-wrap:balance;
+  }
+  .section-note{
+    font-size:14.5px;
+    line-height:1.6;
+    color:var(--muted);
+    max-width:66ch;
+    margin:0 0 22px;
+  }
+
+  figure{margin:0;}
+  .fig-frame{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:18px 18px 14px;
+    overflow-x:auto;
+  }
+  .fig-frame svg{display:block;width:100%;height:auto;min-width:640px;}
+  figcaption{
+    font-size:13.5px;
+    line-height:1.6;
+    color:var(--muted);
+    margin-top:12px;
+    max-width:74ch;
+  }
+  figcaption b{color:var(--ink);font-weight:600;}
+
+  svg text{font-family:var(--font-body);fill:var(--ink);}
+  svg .mono{font-family:var(--font-mono);}
+  svg .lbl-main{font-size:12.5px;font-weight:600;}
+  svg .lbl-sub{font-size:10.5px;fill:var(--muted);}
+  svg .lbl-edge{font-size:10px;fill:var(--muted);}
+  svg .ns-label{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;}
+
+  .callouts{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    margin-top:20px;
+  }
+  .callout{
+    display:grid;
+    grid-template-columns:auto 1fr;
+    gap:10px 12px;
+    align-items:start;
+    padding:12px 14px;
+    border-radius:9px;
+    border:1px solid var(--line);
+    background:var(--surface);
+    font-size:13.5px;
+    line-height:1.55;
+  }
+  .callout .tag{
+    font-family:var(--font-mono);
+    font-size:10.5px;
+    font-weight:600;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    padding:3px 7px;
+    border-radius:5px;
+    white-space:nowrap;
+  }
+  .callout.gotcha .tag{background:var(--danger-soft);color:var(--danger);}
+  .callout.fact .tag{background:var(--mesh-soft);color:var(--mesh);}
+
+  footer{
+    margin-top:64px;
+    padding-top:20px;
+    border-top:1px solid var(--line);
+    font-size:12.5px;
+    color:var(--muted);
+    font-family:var(--font-mono);
+  }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+</head>
+<body>
+<div class="page">
+
+  <p class="eyebrow">Bookinfo · Istio · OpenTelemetry · Jaeger</p>
+  <h1>How one request becomes one trace</h1>
+  <p class="lede">
+    Three views of the same minikube lab: the full path a request and its telemetry take through the mesh,
+    the propagator bug that split every trace in two, and the one-file patch — the
+    <code>Dockerfile.productpage-patched</code> currently open — that puts it back together.
+  </p>
+
+  <section>
+    <h2>1 — The stack, two paths through it</h2>
+    <p class="section-note">
+      Every request follows the same route Envoy sidecars route it along (solid). Alongside it, each sidecar and the
+      app itself independently ship spans and metrics to the observability namespace (dashed / dotted) — a separate
+      plane that Kiali and Jaeger read back from, never the request path itself.
+    </p>
+    <figure>
+      <div class="fig-frame">
+        <svg viewBox="0 0 1040 706" role="img" aria-label="Diagram: a browser request flows through istio-ingressgateway to productpage-v1, then to details-v1 and reviews-v1/v2/v3, then to ratings-v1, all in the default namespace; in parallel every Envoy sidecar exports OTLP spans to otel-gateway-collector which forwards to jaeger-lab, while Prometheus scrapes sidecar metrics and Kiali reads from both Prometheus and Jaeger.">
+          <defs>
+            <marker id="arrMesh" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <polygon points="0,0 10,5 0,10" fill="var(--mesh)"/>
+            </marker>
+            <marker id="arrTrace" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <polygon points="0,0 10,5 0,10" fill="var(--trace)"/>
+            </marker>
+            <marker id="arrMuted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <polygon points="0,0 10,5 0,10" fill="var(--muted)"/>
+            </marker>
+          </defs>
+
+          <!-- namespace groupings -->
+          <rect x="195" y="255" width="180" height="100" rx="10" fill="var(--surface-2)" stroke="var(--line)" stroke-dasharray="4 3"/>
+          <text x="207" y="272" class="ns-label" fill="var(--muted)">istio-system</text>
+
+          <rect x="385" y="168" width="610" height="284" rx="10" fill="var(--surface-2)" stroke="var(--line)" stroke-dasharray="4 3"/>
+          <text x="397" y="186" class="ns-label" fill="var(--muted)">default namespace</text>
+
+          <rect x="385" y="462" width="415" height="182" rx="10" fill="var(--surface-2)" stroke="var(--line)" stroke-dasharray="4 3"/>
+          <text x="397" y="480" class="ns-label" fill="var(--muted)">observability namespace</text>
+
+          <!-- mesh request path arrows (drawn first so nodes sit on top of their ends) -->
+          <line x1="172" y1="312" x2="207" y2="312" stroke="var(--mesh)" stroke-width="1.6" marker-end="url(#arrMesh)"/>
+          <text x="140" y="298" text-anchor="middle" class="lbl-edge mono">tunnel :80</text>
+
+          <line x1="362" y1="312" x2="397" y2="316" stroke="var(--mesh)" stroke-width="1.6" marker-end="url(#arrMesh)"/>
+
+          <line x1="552" y1="308" x2="606" y2="235" stroke="var(--mesh)" stroke-width="1.6" marker-end="url(#arrMesh)"/>
+          <text x="605" y="270" text-anchor="end" class="lbl-edge">GET /details/&#123;id&#125;</text>
+
+          <line x1="552" y1="330" x2="606" y2="400" stroke="var(--mesh)" stroke-width="1.6" marker-end="url(#arrMesh)"/>
+          <text x="605" y="355" text-anchor="end" class="lbl-edge">GET /reviews/&#123;id&#125;</text>
+
+          <line x1="762" y1="405" x2="826" y2="405" stroke="var(--mesh)" stroke-width="1.6" marker-end="url(#arrMesh)"/>
+          <text x="794" y="395" text-anchor="middle" class="lbl-edge">v2 · v3 only</text>
+
+          <!-- telemetry bus -->
+          <line x1="90" y1="440" x2="905" y2="440" stroke="var(--trace)" stroke-width="1" stroke-dasharray="2 4" opacity=".55"/>
+          <line x1="285" y1="345" x2="285" y2="440" stroke="var(--trace)" stroke-width="1" stroke-dasharray="2 4" opacity=".7"/>
+          <line x1="475" y1="351" x2="475" y2="440" stroke="var(--trace)" stroke-width="1" stroke-dasharray="2 4" opacity=".7"/>
+          <line x1="655" y1="261" x2="655" y2="440" stroke="var(--trace)" stroke-width="1" stroke-dasharray="2 4" opacity=".7"/>
+          <line x1="715" y1="441" x2="715" y2="440" stroke="var(--trace)" stroke-width="1" stroke-dasharray="2 4" opacity=".7"/>
+          <line x1="905" y1="441" x2="905" y2="440" stroke="var(--trace)" stroke-width="1" stroke-dasharray="2 4" opacity=".7"/>
+
+          <line x1="495" y1="440" x2="495" y2="476" stroke="var(--trace)" stroke-width="1.6" stroke-dasharray="5 3" marker-end="url(#arrTrace)"/>
+          <text x="503" y="465" class="lbl-edge mono" fill="var(--trace)">OTLP spans, traceparent-linked</text>
+
+          <line x1="495" y1="540" x2="495" y2="571" stroke="var(--trace)" stroke-width="1.6" marker-end="url(#arrTrace)"/>
+          <text x="503" y="560" class="lbl-edge mono" fill="var(--trace)">otlp/jaeger export</text>
+
+          <line x1="720" y1="440" x2="720" y2="476" stroke="var(--muted)" stroke-width="1.4" stroke-dasharray="1 4" marker-end="url(#arrMuted)"/>
+          <text x="728" y="465" class="lbl-edge mono">scrape :15090</text>
+
+          <line x1="720" y1="540" x2="720" y2="571" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#arrMuted)"/>
+          <line x1="590" y1="600" x2="646" y2="600" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#arrMuted)"/>
+          <text x="600" y="592" class="lbl-edge">reads</text>
+
+          <!-- nodes: mesh row -->
+          <g>
+            <rect x="20" y="280" width="150" height="64" rx="8" fill="var(--surface)" stroke="var(--muted)" stroke-dasharray="3 3"/>
+            <text x="95" y="308" text-anchor="middle" class="lbl-main">Browser</text>
+            <text x="95" y="324" text-anchor="middle" class="lbl-sub mono">curl /productpage</text>
+          </g>
+
+          <g>
+            <rect x="210" y="280" width="150" height="64" rx="8" fill="var(--surface)" stroke="var(--mesh)"/>
+            <text x="285" y="306" text-anchor="middle" class="lbl-main">istio-ingressgateway</text>
+            <text x="285" y="322" text-anchor="middle" class="lbl-sub mono">Envoy · routes 100%</text>
+            <text x="285" y="336" text-anchor="middle" class="lbl-sub">to VirtualService</text>
+          </g>
+
+          <g>
+            <rect x="400" y="281" width="150" height="70" rx="8" fill="var(--surface)" stroke="var(--mesh)"/>
+            <text x="475" y="308" text-anchor="middle" class="lbl-main">productpage-v1</text>
+            <text x="475" y="324" text-anchor="middle" class="lbl-sub">Flask app</text>
+            <text x="475" y="337" text-anchor="middle" class="lbl-sub">+ istio-proxy sidecar</text>
+          </g>
+
+          <g>
+            <rect x="605" y="191" width="150" height="70" rx="8" fill="var(--surface)" stroke="var(--mesh)"/>
+            <text x="680" y="218" text-anchor="middle" class="lbl-main">details-v1</text>
+            <text x="680" y="234" text-anchor="middle" class="lbl-sub">Ruby app</text>
+            <text x="680" y="247" text-anchor="middle" class="lbl-sub">+ istio-proxy sidecar</text>
+          </g>
+
+          <g>
+            <rect x="605" y="371" width="150" height="70" rx="8" fill="var(--surface)" stroke="var(--mesh)"/>
+            <text x="680" y="398" text-anchor="middle" class="lbl-main">reviews-v1 / v2 / v3</text>
+            <text x="680" y="414" text-anchor="middle" class="lbl-sub">Java app</text>
+            <text x="680" y="427" text-anchor="middle" class="lbl-sub">+ istio-proxy sidecar</text>
+          </g>
+
+          <g>
+            <rect x="827" y="371" width="150" height="70" rx="8" fill="var(--surface)" stroke="var(--mesh)"/>
+            <text x="902" y="398" text-anchor="middle" class="lbl-main">ratings-v1</text>
+            <text x="902" y="414" text-anchor="middle" class="lbl-sub">Node.js app</text>
+            <text x="902" y="427" text-anchor="middle" class="lbl-sub">+ istio-proxy sidecar</text>
+          </g>
+
+          <!-- nodes: observability row -->
+          <g>
+            <rect x="400" y="476" width="190" height="64" rx="8" fill="var(--surface)" stroke="var(--trace)"/>
+            <text x="495" y="500" text-anchor="middle" class="lbl-main">otel-gateway-collector</text>
+            <text x="495" y="516" text-anchor="middle" class="lbl-sub mono">grpc :4317 · http :4318</text>
+            <text x="495" y="529" text-anchor="middle" class="lbl-sub">memory_limiter → batch</text>
+          </g>
+
+          <g>
+            <rect x="400" y="571" width="190" height="54" rx="8" fill="var(--surface)" stroke="var(--trace)"/>
+            <text x="495" y="593" text-anchor="middle" class="lbl-main">jaeger-lab</text>
+            <text x="495" y="609" text-anchor="middle" class="lbl-sub mono">collector + query :16686</text>
+          </g>
+
+          <g>
+            <rect x="646" y="476" width="148" height="64" rx="8" fill="var(--surface)" stroke="var(--muted)"/>
+            <text x="720" y="502" text-anchor="middle" class="lbl-main">prometheus</text>
+            <text x="720" y="518" text-anchor="middle" class="lbl-sub mono">:9090</text>
+            <text x="720" y="531" text-anchor="middle" class="lbl-sub">istio_requests_total</text>
+          </g>
+
+          <g>
+            <rect x="646" y="571" width="148" height="54" rx="8" fill="var(--surface)" stroke="var(--muted)"/>
+            <text x="720" y="593" text-anchor="middle" class="lbl-main">kiali</text>
+            <text x="720" y="609" text-anchor="middle" class="lbl-sub mono">:20001 graph</text>
+          </g>
+
+          <!-- legend -->
+          <g class="mono">
+            <line x1="30" y1="672" x2="70" y2="672" stroke="var(--mesh)" stroke-width="1.8"/>
+            <text x="78" y="676" class="lbl-edge">request path (mesh)</text>
+
+            <line x1="260" y1="672" x2="300" y2="672" stroke="var(--trace)" stroke-width="1.6" stroke-dasharray="5 3"/>
+            <text x="308" y="676" class="lbl-edge">span export (OTLP)</text>
+
+            <line x1="510" y1="672" x2="550" y2="672" stroke="var(--muted)" stroke-width="1.4" stroke-dasharray="1 4"/>
+            <text x="558" y="676" class="lbl-edge">metrics scrape</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>
+        <b>Fig. 1</b> — one namespace boundary, two independent planes. The mesh request path (solid) is what a user
+        waits on; the telemetry plane (dashed/dotted) runs alongside it and only becomes visible in Jaeger, Prometheus,
+        and Kiali. Only <code>reviews-v2</code> and <code>reviews-v3</code> call <code>ratings</code> — <code>v1</code>
+        never does, which is why its edge in Kiali only lights up part of the time.
+      </figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>2 — Why spans didn't join into one trace</h2>
+    <p class="section-note">
+      Getting Fig. 1's dashed path working was step one. It produced traces — but every one of them arrived in Jaeger
+      as <i>two disconnected trees</i>: Envoy's hops correctly chained together, and the app's own Flask span sat off
+      to the side under a different trace ID. Same request, same headers, two identities. Here's the mechanism, before
+      and after the fix in <code>productpage_patched.py</code>.
+    </p>
+    <figure>
+      <div class="fig-frame">
+        <svg viewBox="0 0 1040 470" role="img" aria-label="Sequence diagram comparing before and after a code patch. Before: Envoy sends a request carrying a traceparent header to Flask; at import time productpage.py calls set_global_textmap(B3MultiFormat()), so Flask's context extraction looks for B3 headers, finds none, and starts a new root span; Envoy and Flask export spans under two different trace IDs, landing as two disconnected traces in Jaeger. After: that override line is removed, Flask extracts the W3C traceparent header directly, and both Envoy and Flask export spans under the same trace ID, landing as one joined trace in Jaeger.">
+          <defs>
+            <marker id="arrMesh2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <polygon points="0,0 10,5 0,10" fill="var(--mesh)"/>
+            </marker>
+            <marker id="arrTraceD" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <polygon points="0,0 10,5 0,10" fill="var(--danger)"/>
+            </marker>
+            <marker id="arrTraceG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <polygon points="0,0 10,5 0,10" fill="var(--good)"/>
+            </marker>
+          </defs>
+
+          <!-- panel headers -->
+          <text x="250" y="26" text-anchor="middle" class="lbl-main" fill="var(--danger)">BEFORE — productpage.py (original)</text>
+          <text x="790" y="26" text-anchor="middle" class="lbl-main" fill="var(--good)">AFTER — productpage_patched.py</text>
+
+          <!-- ===== LEFT PANEL (x offset 40) ===== -->
+          <!-- lifelines -->
+          <line x1="90" y1="50" x2="90" y2="410" stroke="var(--line)" stroke-width="1.2"/>
+          <line x1="250" y1="50" x2="250" y2="410" stroke="var(--line)" stroke-width="1.2"/>
+          <line x1="410" y1="50" x2="410" y2="410" stroke="var(--line)" stroke-width="1.2"/>
+          <text x="90" y="44" text-anchor="middle" class="lbl-sub mono">Envoy</text>
+          <text x="250" y="44" text-anchor="middle" class="lbl-sub mono">Flask + OTel SDK</text>
+          <text x="410" y="44" text-anchor="middle" class="lbl-sub mono">Jaeger</text>
+
+          <line x1="90" y1="80" x2="243" y2="80" stroke="var(--mesh)" stroke-width="1.5" marker-end="url(#arrMesh2)"/>
+          <text x="167" y="72" text-anchor="middle" class="lbl-edge mono">traceparent: 00-AAAA…-01</text>
+
+          <rect x="130" y="98" width="240" height="34" rx="6" fill="var(--danger-soft)" stroke="var(--danger)"/>
+          <text x="250" y="112" text-anchor="middle" class="lbl-edge mono" fill="var(--danger)">import time:</text>
+          <text x="250" y="125" text-anchor="middle" class="lbl-edge mono" fill="var(--danger)">set_global_textmap(B3MultiFormat())</text>
+
+          <path d="M 250 160 q 34 0 34 20 q 0 20 -34 20" fill="none" stroke="var(--danger)" stroke-width="1.5" marker-end="url(#arrTraceD)"/>
+          <text x="255" y="155" class="lbl-edge" fill="var(--danger)">extract via B3 → no x-b3-traceid found</text>
+          <text x="255" y="212" class="lbl-edge" fill="var(--danger)">→ starts new root span, TraceId BBBB</text>
+
+          <line x1="243" y1="240" x2="410" y2="270" stroke="var(--danger)" stroke-width="1.4" stroke-dasharray="5 3" marker-end="url(#arrTraceD)"/>
+          <text x="330" y="250" text-anchor="middle" class="lbl-edge mono" fill="var(--danger)">span, TraceId BBBB</text>
+
+          <line x1="90" y1="290" x2="403" y2="310" stroke="var(--danger)" stroke-width="1.4" stroke-dasharray="5 3" marker-end="url(#arrTraceD)"/>
+          <text x="200" y="325" text-anchor="middle" class="lbl-edge mono" fill="var(--danger)">span, TraceId AAAA</text>
+
+          <rect x="60" y="352" width="380" height="42" rx="8" fill="var(--danger-soft)" stroke="var(--danger)"/>
+          <text x="250" y="378" text-anchor="middle" class="lbl-main" fill="var(--danger)">✕ Jaeger: 2 disconnected traces</text>
+
+          <!-- ===== RIGHT PANEL (x offset 560) ===== -->
+          <line x1="610" y1="50" x2="610" y2="410" stroke="var(--line)" stroke-width="1.2"/>
+          <line x1="790" y1="50" x2="790" y2="410" stroke="var(--line)" stroke-width="1.2"/>
+          <line x1="950" y1="50" x2="950" y2="410" stroke="var(--line)" stroke-width="1.2"/>
+          <text x="610" y="44" text-anchor="middle" class="lbl-sub mono">Envoy</text>
+          <text x="790" y="44" text-anchor="middle" class="lbl-sub mono">Flask + OTel SDK</text>
+          <text x="950" y="44" text-anchor="middle" class="lbl-sub mono">Jaeger</text>
+
+          <line x1="610" y1="80" x2="783" y2="80" stroke="var(--mesh)" stroke-width="1.5" marker-end="url(#arrMesh2)"/>
+          <text x="700" y="72" text-anchor="middle" class="lbl-edge mono">traceparent: 00-AAAA…-01</text>
+
+          <rect x="650" y="98" width="240" height="34" rx="6" fill="var(--good-soft)" stroke="var(--good)"/>
+          <text x="770" y="112" text-anchor="middle" class="lbl-edge mono" fill="var(--good)">override line commented out —</text>
+          <text x="770" y="125" text-anchor="middle" class="lbl-edge mono" fill="var(--good)">Instrumentation CR's setting stands</text>
+
+          <path d="M 790 160 q 34 0 34 20 q 0 20 -34 20" fill="none" stroke="var(--good)" stroke-width="1.5" marker-end="url(#arrTraceG)"/>
+          <text x="795" y="155" class="lbl-edge" fill="var(--good)">extract via tracecontext → AAAA found</text>
+          <text x="795" y="212" class="lbl-edge" fill="var(--good)">→ continues span under TraceId AAAA</text>
+
+          <line x1="783" y1="240" x2="950" y2="270" stroke="var(--good)" stroke-width="1.4" stroke-dasharray="5 3" marker-end="url(#arrTraceG)"/>
+          <text x="870" y="250" text-anchor="middle" class="lbl-edge mono" fill="var(--good)">span, TraceId AAAA</text>
+
+          <line x1="610" y1="290" x2="943" y2="310" stroke="var(--good)" stroke-width="1.4" stroke-dasharray="5 3" marker-end="url(#arrTraceG)"/>
+          <text x="740" y="325" text-anchor="middle" class="lbl-edge mono" fill="var(--good)">span, TraceId AAAA</text>
+
+          <rect x="580" y="352" width="380" height="42" rx="8" fill="var(--good-soft)" stroke="var(--good)"/>
+          <text x="770" y="378" text-anchor="middle" class="lbl-main" fill="var(--good)">✓ Jaeger: 1 joined trace, 11–13 spans</text>
+        </svg>
+      </div>
+      <figcaption>
+        <b>Fig. 2</b> — same three actors, same inbound header, one line of code apart. Bookinfo's stock
+        <code>productpage.py</code> calls <code>set_global_textmap(B3MultiFormat())</code> unconditionally at import,
+        after the OTel auto-instrumentation agent has already configured <code>tracecontext</code> — so Flask always
+        goes looking for B3 headers Envoy never sends. Commenting out just that call is the entire fix; the local
+        <code>B3MultiFormat()</code> object <code>getForwardHeaders()</code> still uses for explicit b3 header
+        copying is untouched.
+      </figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>3 — Where the open file fits</h2>
+    <p class="section-note">
+      <code>Dockerfile.productpage-patched</code> is the delivery mechanism for Fig. 2's fix — it doesn't contain the
+      patch itself, it bakes the already-edited source file over the stock image.
+    </p>
+    <figure>
+      <div class="fig-frame">
+        <svg viewBox="0 0 1040 160" role="img" aria-label="Pipeline: the stock productpage.py is copied and edited into productpage_patched.py, which Dockerfile.productpage-patched copies into a new image built with minikube image build, which kubectl set image then rolls out to the productpage-v1 deployment.">
+          <defs>
+            <marker id="arrPipe" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <polygon points="0,0 10,5 0,10" fill="var(--muted)"/>
+            </marker>
+          </defs>
+          <g class="mono">
+            <rect x="10" y="45" width="175" height="60" rx="8" fill="var(--surface)" stroke="var(--line)"/>
+            <text x="97" y="70" text-anchor="middle" class="lbl-main mono" fill="var(--ink)">productpage.py</text>
+            <text x="97" y="86" text-anchor="middle" class="lbl-sub">bookinfo v1.20.1 image</text>
+
+            <line x1="185" y1="75" x2="217" y2="75" stroke="var(--muted)" marker-end="url(#arrPipe)"/>
+            <text x="201" y="65" text-anchor="middle" class="lbl-edge">curl + edit</text>
+
+            <rect x="220" y="45" width="200" height="60" rx="8" fill="var(--surface)" stroke="var(--good)"/>
+            <text x="320" y="66" text-anchor="middle" class="lbl-main mono">productpage_patched.py</text>
+            <text x="320" y="82" text-anchor="middle" class="lbl-sub">B3MultiFormat() call removed</text>
+            <text x="320" y="95" text-anchor="middle" class="lbl-sub">(Fig. 2's fix)</text>
+
+            <line x1="420" y1="75" x2="452" y2="75" stroke="var(--muted)" marker-end="url(#arrPipe)"/>
+            <text x="436" y="65" text-anchor="middle" class="lbl-edge">COPY</text>
+
+            <rect x="455" y="45" width="215" height="60" rx="8" fill="var(--surface)" stroke="var(--mesh)"/>
+            <text x="562" y="66" text-anchor="middle" class="lbl-main mono">Dockerfile.productpage-patched</text>
+            <text x="562" y="82" text-anchor="middle" class="lbl-sub">FROM …examples-bookinfo-productpage-v1:1.20.1</text>
+            <text x="562" y="95" text-anchor="middle" class="lbl-sub">→ /opt/microservices/productpage.py</text>
+
+            <line x1="670" y1="75" x2="702" y2="75" stroke="var(--muted)" marker-end="url(#arrPipe)"/>
+            <text x="686" y="65" text-anchor="middle" class="lbl-edge">build</text>
+
+            <rect x="705" y="45" width="160" height="60" rx="8" fill="var(--surface)" stroke="var(--line)"/>
+            <text x="785" y="66" text-anchor="middle" class="lbl-main mono">minikube image</text>
+            <text x="785" y="80" text-anchor="middle" class="lbl-main mono">build</text>
+            <text x="785" y="95" text-anchor="middle" class="lbl-sub">-t productpage-v1-patched</text>
+
+            <line x1="865" y1="75" x2="897" y2="75" stroke="var(--muted)" marker-end="url(#arrPipe)"/>
+            <text x="881" y="65" text-anchor="middle" class="lbl-edge">deploy</text>
+
+            <rect x="900" y="45" width="130" height="60" rx="8" fill="var(--surface)" stroke="var(--line)"/>
+            <text x="965" y="66" text-anchor="middle" class="lbl-main mono">kubectl set</text>
+            <text x="965" y="80" text-anchor="middle" class="lbl-main mono">image</text>
+            <text x="965" y="95" text-anchor="middle" class="lbl-sub">deploy/productpage-v1</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>
+        <b>Fig. 3</b> — five steps, one purpose: get the already-fixed source file running inside the mesh without
+        touching the <code>Instrumentation</code> CR or any env var, since the override happens in application code
+        that runs after both.
+      </figcaption>
+    </figure>
+  </section>
+
+  <div class="callouts">
+    <div class="callout fact">
+      <span class="tag">Port</span>
+      <span>The <code>Instrumentation</code> CR must point at <b>:4318</b> (OTLP/HTTP), not <b>:4317</b> (gRPC) — Python's
+      auto-instrumentation defaults to HTTP, and pointing it at the gRPC port silently fails every export with a 415.</span>
+    </div>
+    <div class="callout gotcha">
+      <span class="tag">Not the same bug</span>
+      <span>Removing the <code>inject-python</code> annotation entirely (Step 10 of the runbook) does <i>not</i> break
+      Envoy-to-Envoy correlation on this stack — <code>productpage.py</code> separately copies the raw
+      <code>traceparent</code>/<code>tracestate</code> header values by hand in <code>getForwardHeaders()</code>,
+      independent of the OTel SDK. Only the app's own span joining the chain depends on Fig. 2's fix.</span>
+    </div>
+  </div>
+
+  <footer>istio-deployment/ · Minikube_Deployment_Testing_Runbook.md, steps 7.1 – 8.6</footer>
+</div>
+</body>
+</html>
